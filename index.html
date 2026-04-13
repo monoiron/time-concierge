@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time Concierge — реєстрація на рейс</title>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+  <script src="airports.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3350;
+      --accent: #4f7cff;
+      --accent-hover: #6b93ff;
+      --green: #2ecc8e;
+      --yellow: #f5c542;
+      --text: #e8eaf6;
+      --text-muted: #7b82a8;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 64px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+
+    header p {
+      margin-top: 6px;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+    }
+
+    .plane-icon {
+      font-size: 2rem;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .field {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .iata-wrapper {
+      position: relative;
+    }
+
+    input[type="text"], input[type="date"], input[type="time"], input[type="number"] {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus,
+    input[type="date"]:focus,
+    input[type="time"]:focus,
+    input[type="number"]:focus {
+      border-color: var(--accent);
+    }
+
+    input[type="text"]::placeholder { color: var(--text-muted); }
+
+    /* Autocomplete dropdown */
+    .autocomplete-list {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+    }
+
+    .autocomplete-list.visible { display: block; }
+
+    .autocomplete-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background 0.1s;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+      background: var(--border);
+    }
+
+    .autocomplete-item .iata-badge {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--accent);
+      min-width: 36px;
+    }
+
+    .autocomplete-item .airport-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .autocomplete-item .airport-name {
+      font-size: 0.88rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+
+    .autocomplete-item .airport-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Airport confirmation chip */
+    .airport-chip {
+      margin-top: 8px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--green);
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 0.83rem;
+      color: var(--green);
+    }
+
+    .airport-chip.visible { display: flex; }
+
+    .airport-chip .chip-label { color: var(--text-muted); }
+
+    /* Date/time row */
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Mode tabs (години / дні) */
+    .mode-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .mode-tab.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .mode-tab:not(.active):hover { color: var(--text); }
+
+    /* Registration preset buttons */
+    .preset-panel { display: none; }
+    .preset-panel.visible { display: block; }
+
+    .presets-grid {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .presets-grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+    .presets-grid.cols-7 { grid-template-columns: repeat(4, 1fr); }
+
+    .preset-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 6px;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .preset-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .custom-val-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .custom-val-row input[type="number"] {
+      width: 90px;
+    }
+
+    .custom-val-row span {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    /* Submit button */
+    .btn-calculate {
+      width: 100%;
+      margin-top: 8px;
+      padding: 14px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      letter-spacing: 0.2px;
+    }
+
+    .btn-calculate:hover { background: var(--accent-hover); }
+    .btn-calculate:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+
+    /* Error */
+    .error-msg {
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: rgba(255,80,80,0.12);
+      border: 1px solid rgba(255,80,80,0.35);
+      border-radius: var(--radius-sm);
+      color: #ff7070;
+      font-size: 0.88rem;
+      display: none;
+    }
+
+    .error-msg.visible { display: block; }
+
+    /* Result card */
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      width: 100%;
+      max-width: 520px;
+      margin-top: 16px;
+      display: none;
+      animation: fadeIn 0.25s ease;
+    }
+
+    .result-card.visible { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .result-header-info { flex: 1; }
+
+    .result-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .result-airport {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .result-airport .iata { color: var(--accent); }
+
+    .result-departure {
+      margin-top: 3px;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+    }
+
+    .result-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .result-row {
+      background: var(--surface2);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .result-row .flag {
+      font-size: 1.5rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .result-row .row-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .result-row .row-datetime {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .result-row .row-tz {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .result-row .row-offset {
+      margin-left: auto;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .result-row .offset-val {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--yellow);
+    }
+
+    .result-row .offset-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .diff-note {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(79,124,255,0.1);
+      border-radius: 6px;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+    }
+
+    .diff-note strong { color: var(--accent); }
+
+    /* Copy button */
+    .btn-copy {
+      width: 100%;
+      margin-top: 16px;
+      padding: 11px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-copy.copied { border-color: var(--green); color: var(--green); }
+
+    .version-footer {
+      margin-top: 28px;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      opacity: 0.5;
+      letter-spacing: 0.3px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Date/time color fix for dark */
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.6);
+      cursor: pointer;
+    }
+
+    @media (max-width: 420px) {
+      .card, .result-card { padding: 20px 16px; }
+      .presets-grid.cols-5 { grid-template-columns: repeat(3, 1fr); }
+      .presets-grid.cols-7 { grid-template-columns: repeat(3, 1fr); }
+      .row-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="plane-icon">✈️</span>
+  <h1>Time Concierge</h1>
+  <p>Розрахунок часу відкриття реєстрації на рейс</p>
+</header>
+
+<div class="card">
+
+  <!-- IATA поле -->
+  <div class="field">
+    <label>Код аеропорту (IATA)</label>
+    <div class="iata-wrapper">
+      <input
+        type="text"
+        id="iataInput"
+        placeholder="Наприклад: JFK, CDG, DXB..."
+        autocomplete="off"
+        maxlength="10"
+      />
+      <div class="autocomplete-list" id="autocompleteList"></div>
+    </div>
+    <div class="airport-chip" id="airportChip">
+      <span>✓</span>
+      <span class="chip-label">Аеропорт:</span>
+      <span id="chipText"></span>
+    </div>
+  </div>
+
+  <!-- Дата та час вильоту -->
+  <div class="field">
+    <label>Дата та час вильоту (місцевий час аеропорту)</label>
+    <div class="row-2">
+      <input type="date" id="depDate" />
+      <input type="time" id="depTime" value="12:00" />
+    </div>
+  </div>
+
+  <!-- Відкриття реєстрації -->
+  <div class="field">
+    <label>Реєстрація відкривається за</label>
+
+    <!-- Перемикач режиму -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tabHours">Години</button>
+      <button class="mode-tab" id="tabDays">Дні</button>
+    </div>
+
+    <!-- Панель: Години -->
+    <div class="preset-panel visible" id="panelHours">
+      <div class="presets-grid cols-5">
+        <button class="preset-btn" data-val="12">12 год</button>
+        <button class="preset-btn" data-val="24">24 год</button>
+        <button class="preset-btn" data-val="36">36 год</button>
+        <button class="preset-btn active" data-val="48">48 год</button>
+        <button class="preset-btn" data-val="72">72 год</button>
+      </div>
+      <div class="custom-val-row">
+        <input type="number" id="customHours" min="1" max="999" placeholder="Інша кількість" />
+        <span>годин до вильоту</span>
+      </div>
+    </div>
+
+    <!-- Панель: Дні -->
+    <div class="preset-panel" id="panelDays">
+      <div class="presets-grid cols-7">
+        <button class="preset-btn" data-val="5">5 днів</button>
+        <button class="preset-btn" data-val="7">7 днів</button>
+        <button class="preset-btn" data-val="10">10 днів</button>
+        <button class="preset-btn" data-val="12">12 днів</button>
+        <button class="preset-btn" data-val="15">15 днів</button>
+        <button class="preset-btn" data-val="30">30 днів</button>
+        <button class="preset-btn" data-val="60">60 днів</button>
+      </div>
+      <div class="custom-val-row">
+        <input type="number" id="customDays" min="1" max="365" placeholder="Інша кількість" />
+        <span>днів до вильоту</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-calculate" id="calcBtn">Розрахувати</button>
+  <div class="error-msg" id="errorMsg"></div>
+
+</div>
+
+<!-- Результат -->
+<div class="result-card" id="resultCard">
+
+  <div class="result-header">
+    <div class="result-header-info">
+      <div class="result-title">Реєстрація відкривається</div>
+      <div class="result-airport" id="resAirport"></div>
+      <div class="result-departure" id="resDeparture"></div>
+    </div>
+  </div>
+
+  <div class="result-rows">
+
+    <div class="result-row">
+      <div class="flag" id="resLocalFlag"></div>
+      <div>
+        <div class="row-label">Місцевий час (аеропорт)</div>
+        <div class="row-datetime" id="resLocalTime"></div>
+        <div class="row-tz" id="resLocalTz"></div>
+      </div>
+      <div class="result-row row-offset">
+        <div class="offset-val" id="resLocalOffset"></div>
+        <div class="offset-label">UTC</div>
+      </div>
+    </div>
+
+    <div class="result-row">
+      <div class="flag">🇺🇦</div>
+      <div>
+        <div class="row-label">Київський час</div>
+        <div class="row-datetime" id="resKyivTime"></div>
+        <div class="row-tz" id="resKyivTz"></div>
+      </div>
+      <div class="result-row row-offset">
+        <div class="offset-val" id="resKyivOffset"></div>
+        <div class="offset-label">UTC</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="diff-note" id="diffNote"></div>
+
+  <button class="btn-copy" id="copyBtn">
+    <span id="copyIcon">📋</span>
+    <span id="copyText">Скопіювати результат</span>
+  </button>
+
+</div>
+
+<div class="version-footer">v1.2</div>
+
+<script>
+const { DateTime } = luxon;
+
+// ─── Стан ───────────────────────────────────────────────
+let selectedAirport = null;
+let mode = 'hours';   // 'hours' | 'days'
+let selectedVal = 48; // значення в поточному режимі
+
+// ─── Ініціалізація дати (сьогодні) ──────────────────────
+(function initDate() {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  document.getElementById('depDate').value = `${y}-${m}-${d}`;
+})();
+
+// ─── IATA Автодоповнення ─────────────────────────────────
+const iataInput = document.getElementById('iataInput');
+const autocompleteList = document.getElementById('autocompleteList');
+const airportChip = document.getElementById('airportChip');
+const chipText = document.getElementById('chipText');
+
+let acIndex = -1;
+
+iataInput.addEventListener('input', () => {
+  const q = iataInput.value.trim().toUpperCase();
+  acIndex = -1;
+
+  if (q.length < 2) { hideDropdown(); clearAirport(); return; }
+
+  const exact = [], startsWith = [], cityMatch = [];
+  for (const [code, ap] of Object.entries(AIRPORTS)) {
+    if (code === q) exact.push({ code, ...ap });
+    else if (code.startsWith(q)) startsWith.push({ code, ...ap });
+    else if (ap.city && ap.city.toUpperCase().startsWith(q)) cityMatch.push({ code, ...ap });
+  }
+  const results = [...exact, ...startsWith, ...cityMatch].slice(0, 8);
+
+  if (results.length === 0) { hideDropdown(); clearAirport(); return; }
+  renderDropdown(results);
+});
+
+iataInput.addEventListener('keydown', (e) => {
+  const items = autocompleteList.querySelectorAll('.autocomplete-item');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); acIndex = Math.min(acIndex + 1, items.length - 1); updateAcHighlight(items); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); acIndex = Math.max(acIndex - 1, 0); updateAcHighlight(items); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (acIndex >= 0) items[acIndex].click(); else if (items.length === 1) items[0].click(); }
+  else if (e.key === 'Escape') hideDropdown();
+});
+
+function updateAcHighlight(items) {
+  items.forEach((el, i) => el.classList.toggle('selected', i === acIndex));
+}
+
+function renderDropdown(results) {
+  autocompleteList.innerHTML = '';
+  results.forEach(ap => {
+    const item = document.createElement('div');
+    item.className = 'autocomplete-item';
+    item.innerHTML = `
+      <span class="iata-badge">${ap.code}</span>
+      <div class="airport-info">
+        <div class="airport-name">${ap.name}</div>
+        <div class="airport-meta">${ap.city}, ${ap.country}</div>
+      </div>`;
+    item.addEventListener('mousedown', (e) => { e.preventDefault(); selectAirport(ap); });
+    autocompleteList.appendChild(item);
+  });
+  autocompleteList.classList.add('visible');
+}
+
+function hideDropdown() { autocompleteList.classList.remove('visible'); acIndex = -1; }
+function clearAirport() { selectedAirport = null; airportChip.classList.remove('visible'); }
+
+function selectAirport(ap) {
+  selectedAirport = ap;
+  iataInput.value = ap.code;
+  hideDropdown();
+  chipText.textContent = `${ap.name} — ${ap.city}, ${ap.country}`;
+  airportChip.classList.add('visible');
+  hideError();
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.iata-wrapper')) hideDropdown();
+});
+
+// ─── Перемикач режиму Години / Дні ───────────────────────
+const tabHours = document.getElementById('tabHours');
+const tabDays  = document.getElementById('tabDays');
+const panelHours = document.getElementById('panelHours');
+const panelDays  = document.getElementById('panelDays');
+
+tabHours.addEventListener('click', () => switchMode('hours'));
+tabDays.addEventListener('click',  () => switchMode('days'));
+
+function switchMode(m) {
+  mode = m;
+  tabHours.classList.toggle('active', m === 'hours');
+  tabDays.classList.toggle('active',  m === 'days');
+  panelHours.classList.toggle('visible', m === 'hours');
+  panelDays.classList.toggle('visible',  m === 'days');
+
+  // скидаємо кастомні поля
+  document.getElementById('customHours').value = '';
+  document.getElementById('customDays').value  = '';
+
+  // дефолтне виділення
+  if (m === 'hours') {
+    setActivePreset(panelHours, 48);
+    selectedVal = 48;
+  } else {
+    setActivePreset(panelDays, null);
+    selectedVal = null;
+  }
+}
+
+function setActivePreset(panel, val) {
+  panel.querySelectorAll('.preset-btn').forEach(b => {
+    b.classList.toggle('active', val !== null && parseInt(b.dataset.val) === val);
+  });
+}
+
+// ─── Preset-кнопки (обидві панелі) ───────────────────────
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const panel = btn.closest('.preset-panel');
+    panel.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedVal = parseInt(btn.dataset.val);
+    // скидаємо кастомне поле активної панелі
+    const customInput = panel.querySelector('input[type="number"]');
+    if (customInput) customInput.value = '';
+  });
+});
+
+// ─── Кастомні поля ────────────────────────────────────────
+document.getElementById('customHours').addEventListener('input', function() {
+  const v = parseInt(this.value);
+  if (v > 0) { setActivePreset(panelHours, null); selectedVal = v; }
+});
+
+document.getElementById('customDays').addEventListener('input', function() {
+  const v = parseInt(this.value);
+  if (v > 0) { setActivePreset(panelDays, null); selectedVal = v; }
+});
+
+// ─── Отримати фінальне значення в годинах ────────────────
+function getOffsetHours() {
+  // кастомні поля мають пріоритет
+  if (mode === 'hours') {
+    const c = parseInt(document.getElementById('customHours').value);
+    if (!isNaN(c) && c > 0) return c;
+  } else {
+    const c = parseInt(document.getElementById('customDays').value);
+    if (!isNaN(c) && c > 0) return c * 24;
+  }
+  if (!selectedVal) return null;
+  return mode === 'days' ? selectedVal * 24 : selectedVal;
+}
+
+// ─── Мітка для відображення та копії ─────────────────────
+function getOffsetLabel() {
+  if (mode === 'hours') {
+    const c = parseInt(document.getElementById('customHours').value);
+    const v = (!isNaN(c) && c > 0) ? c : selectedVal;
+    return `${v} год`;
+  } else {
+    const c = parseInt(document.getElementById('customDays').value);
+    const v = (!isNaN(c) && c > 0) ? c : selectedVal;
+    return `${v} дн.`;
+  }
+}
+
+// ─── Розрахунок ──────────────────────────────────────────
+document.getElementById('calcBtn').addEventListener('click', calculate);
+
+function calculate() {
+  hideError();
+  hideResult();
+
+  const hours = getOffsetHours();
+  const dateVal = document.getElementById('depDate').value;
+  const timeVal = document.getElementById('depTime').value;
+
+  if (!selectedAirport) { showError('Будь ласка, оберіть аеропорт зі списку.'); return; }
+  if (!dateVal) { showError('Вкажіть дату вильоту.'); return; }
+  if (!timeVal) { showError('Вкажіть час вильоту.'); return; }
+  if (!hours || hours < 1) { showError('Оберіть або введіть кількість годин/днів до відкриття реєстрації.'); return; }
+
+  const tz = selectedAirport.tz;
+  const depLocal = DateTime.fromISO(`${dateVal}T${timeVal}`, { zone: tz });
+
+  if (!depLocal.isValid) { showError('Невірна дата або час. Перевірте введені дані.'); return; }
+
+  const checkInLocal = depLocal.minus({ hours });
+  const checkInKyiv  = checkInLocal.setZone('Europe/Kiev');
+
+  renderResult({ airport: selectedAirport, depLocal, checkInLocal, checkInKyiv, hours });
+}
+
+// ─── Форматування ─────────────────────────────────────────
+const MONTHS_UK  = ['січня','лютого','березня','квітня','травня','червня','липня','серпня','вересня','жовтня','листопада','грудня'];
+const WEEKDAYS_UK = ['нд','пн','вт','ср','чт','пт','сб'];
+
+function formatDateTime(dt) {
+  const wd = WEEKDAYS_UK[dt.weekday % 7];
+  const hh = String(dt.hour).padStart(2, '0');
+  const mm = String(dt.minute).padStart(2, '0');
+  return `${dt.day} ${MONTHS_UK[dt.month - 1]} (${wd}), ${hh}:${mm}`;
+}
+
+function formatOffset(dt) {
+  const off = dt.offset;
+  const sign = off >= 0 ? '+' : '−';
+  const h = Math.floor(Math.abs(off) / 60);
+  const m = Math.abs(off) % 60;
+  return m === 0 ? `${sign}${h}` : `${sign}${h}:${String(m).padStart(2,'0')}`;
+}
+
+function getCountryFlag(country) {
+  const flags = {
+    'United States':'🇺🇸','United Kingdom':'🇬🇧','France':'🇫🇷','Germany':'🇩🇪',
+    'Spain':'🇪🇸','Italy':'🇮🇹','Turkey':'🇹🇷','United Arab Emirates':'🇦🇪',
+    'Egypt':'🇪🇬','Thailand':'🇹🇭','Japan':'🇯🇵','China':'🇨🇳','India':'🇮🇳',
+    'Australia':'🇦🇺','Canada':'🇨🇦','Brazil':'🇧🇷','Mexico':'🇲🇽',
+    'Netherlands':'🇳🇱','Switzerland':'🇨🇭','Austria':'🇦🇹','Portugal':'🇵🇹',
+    'Greece':'🇬🇷','Poland':'🇵🇱','Czech Republic':'🇨🇿','Hungary':'🇭🇺',
+    'Singapore':'🇸🇬','South Korea':'🇰🇷','Indonesia':'🇮🇩','Malaysia':'🇲🇾',
+    'Vietnam':'🇻🇳','Israel':'🇮🇱','Morocco':'🇲🇦','South Africa':'🇿🇦',
+    'Kenya':'🇰🇪','Ukraine':'🇺🇦','Russia':'🇷🇺','Belarus':'🇧🇾',
+    'Georgia':'🇬🇪','Armenia':'🇦🇲','Azerbaijan':'🇦🇿','Kazakhstan':'🇰🇿',
+    'Uzbekistan':'🇺🇿','Serbia':'🇷🇸','Croatia':'🇭🇷','Romania':'🇷🇴',
+    'Bulgaria':'🇧🇬','Finland':'🇫🇮','Sweden':'🇸🇪','Norway':'🇳🇴',
+    'Denmark':'🇩🇰','Qatar':'🇶🇦','Saudi Arabia':'🇸🇦','Kuwait':'🇰🇼',
+    'Bahrain':'🇧🇭','Jordan':'🇯🇴','Lebanon':'🇱🇧','Cyprus':'🇨🇾',
+    'Maldives':'🇲🇻','Sri Lanka':'🇱🇰','Nepal':'🇳🇵','Philippines':'🇵🇭',
+    'Taiwan':'🇹🇼','Hong Kong':'🇭🇰','New Zealand':'🇳🇿','Argentina':'🇦🇷',
+    'Chile':'🇨🇱','Colombia':'🇨🇴','Peru':'🇵🇪','Cuba':'🇨🇺',
+  };
+  return flags[country] || '🌍';
+}
+
+// ─── Відображення результату ──────────────────────────────
+function renderResult({ airport, depLocal, checkInLocal, checkInKyiv, hours }) {
+  document.getElementById('resAirport').innerHTML =
+    `<span class="iata">${airport.code}</span> — ${airport.name}`;
+  document.getElementById('resDeparture').textContent =
+    `Виліт: ${formatDateTime(depLocal)} (${depLocal.toFormat('ZZZZ')})`;
+
+  document.getElementById('resLocalFlag').textContent = getCountryFlag(airport.country);
+  document.getElementById('resLocalTime').textContent = formatDateTime(checkInLocal);
+  document.getElementById('resLocalTz').textContent   = `${airport.city} · ${checkInLocal.toFormat('ZZZZ')}`;
+  document.getElementById('resLocalOffset').textContent = formatOffset(checkInLocal);
+
+  document.getElementById('resKyivTime').textContent   = formatDateTime(checkInKyiv);
+  document.getElementById('resKyivTz').textContent     = `Київ · ${checkInKyiv.toFormat('ZZZZ')}`;
+  document.getElementById('resKyivOffset').textContent = formatOffset(checkInKyiv);
+
+  const diffMin = checkInKyiv.offset - checkInLocal.offset;
+  const absDiff = Math.abs(diffMin / 60);
+  let diffText = '';
+  if (diffMin === 0) {
+    diffText = 'Київський час збігається з місцевим часом аеропорту.';
+  } else {
+    const dir = diffMin > 0 ? 'попереду' : 'позаду';
+    const hLabel = absDiff % 1 === 0
+      ? `${absDiff} год`
+      : `${Math.floor(absDiff)} год ${Math.abs(diffMin % 60)} хв`;
+    diffText = `Київ <strong>${dir}</strong> на <strong>${hLabel}</strong> відносно місцевого часу.`;
+  }
+  document.getElementById('diffNote').innerHTML = diffText;
+
+  document.getElementById('resultCard').classList.add('visible');
+  document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─── Копіювання ───────────────────────────────────────────
+document.getElementById('copyBtn').addEventListener('click', copyResult);
+
+function copyResult() {
+  const airport   = selectedAirport;
+  const localTime = document.getElementById('resLocalTime').textContent;
+  const localTz   = document.getElementById('resLocalTz').textContent;
+  const kyivTime  = document.getElementById('resKyivTime').textContent;
+  const departure = document.getElementById('resDeparture').textContent;
+  const label     = getOffsetLabel();
+
+  const text = [
+    `✈ Реєстрація на рейс (за ${label} до вильоту)`,
+    `Аеропорт: ${airport.code} — ${airport.name}, ${airport.city}`,
+    departure,
+    ``,
+    `📍 Місцевий час: ${localTime} (${localTz})`,
+    `🇺🇦 Київський час: ${kyivTime}`,
+  ].join('\n');
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    const icon = document.getElementById('copyIcon');
+    const txt  = document.getElementById('copyText');
+    btn.classList.add('copied');
+    icon.textContent = '✓';
+    txt.textContent  = 'Скопійовано!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      icon.textContent = '📋';
+      txt.textContent  = 'Скопіювати результат';
+    }, 2000);
+  }).catch(() => showError('Не вдалося скопіювати. Спробуйте вручну.'));
+}
+
+// ─── Допоміжні ────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideError()  { document.getElementById('errorMsg').classList.remove('visible'); }
+function hideResult() { document.getElementById('resultCard').classList.remove('visible'); }
+</script>
+</body>
+</html>
