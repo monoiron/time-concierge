@@ -766,18 +766,26 @@ document.getElementById('customDays').addEventListener('input', function() {
   if (v > 0) { setActivePreset(panelDays, null); selectedVal = v; }
 });
 
-// ─── Отримати фінальне значення в годинах ────────────────
-function getOffsetHours() {
+// ─── Отримати фінальну дюрацію для відліку назад ─────────
+// ВАЖЛИВО щодо DST:
+//   • «Години» → фіксований астрономічний інтервал ({ hours }).
+//     Так авіакомпанії трактують «реєстрація за N год до вильоту».
+//   • «Дні»    → КАЛЕНДАРНІ доби ({ days }). Luxon зберігає ту саму
+//     стінну годину (08:00 → 08:00), автоматично враховуючи перехід
+//     на зимовий/літній час між точкою реєстрації та вильотом.
+//     Без цього 60 днів через жовтневий перехід давали зайву годину.
+// Повертає об'єкт { days } | { hours } для DateTime.minus(), або null.
+function getOffsetDuration() {
   // кастомні поля мають пріоритет
   if (mode === 'hours') {
     const c = parseInt(document.getElementById('customHours').value);
-    if (!isNaN(c) && c > 0) return c;
+    if (!isNaN(c) && c > 0) return { hours: c };
   } else {
     const c = parseInt(document.getElementById('customDays').value);
-    if (!isNaN(c) && c > 0) return c * 24;
+    if (!isNaN(c) && c > 0) return { days: c };
   }
   if (!selectedVal) return null;
-  return mode === 'days' ? selectedVal * 24 : selectedVal;
+  return mode === 'days' ? { days: selectedVal } : { hours: selectedVal };
 }
 
 // ─── Мітка для відображення та копії ─────────────────────
@@ -800,24 +808,24 @@ function calculate() {
   hideError();
   hideResult();
 
-  const hours = getOffsetHours();
+  const dur = getOffsetDuration();
   const dateVal = document.getElementById('depDate').value;
   const timeVal = document.getElementById('depTime').value;
 
   if (!selectedAirport) { showError('Будь ласка, оберіть аеропорт зі списку.'); return; }
   if (!dateVal) { showError('Вкажіть дату вильоту.'); return; }
   if (!timeVal) { showError('Вкажіть час вильоту.'); return; }
-  if (!hours || hours < 1) { showError('Оберіть або введіть кількість годин/днів до відкриття реєстрації.'); return; }
+  if (!dur) { showError('Оберіть або введіть кількість годин/днів до відкриття реєстрації.'); return; }
 
   const tz = selectedAirport.tz;
   const depLocal = DateTime.fromISO(`${dateVal}T${timeVal}`, { zone: tz });
 
   if (!depLocal.isValid) { showError('Невірна дата або час. Перевірте введені дані.'); return; }
 
-  const checkInLocal = depLocal.minus({ hours });
+  const checkInLocal = depLocal.minus(dur);
   const checkInKyiv  = checkInLocal.setZone('Europe/Kiev');
 
-  renderResult({ airport: selectedAirport, depLocal, checkInLocal, checkInKyiv, hours });
+  renderResult({ airport: selectedAirport, depLocal, checkInLocal, checkInKyiv });
 }
 
 // ─── Форматування ─────────────────────────────────────────
@@ -863,7 +871,7 @@ function getCountryFlag(country) {
 }
 
 // ─── Відображення результату ──────────────────────────────
-function renderResult({ airport, depLocal, checkInLocal, checkInKyiv, hours }) {
+function renderResult({ airport, depLocal, checkInLocal, checkInKyiv }) {
   document.getElementById('resAirport').innerHTML =
     `<span class="iata">${airport.code}</span> — ${airport.name}`;
   document.getElementById('resDeparture').textContent =
