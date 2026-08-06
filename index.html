@@ -615,7 +615,7 @@
 
 </div>
 
-<div class="version-footer">v1.3</div>
+<div class="version-footer">v1.2</div>
 
 <script>
 const { DateTime } = luxon;
@@ -826,6 +826,27 @@ function calculate() {
   const checkInKyiv  = checkInLocal.setZone('Europe/Kiev');
 
   renderResult({ airport: selectedAirport, depLocal, checkInLocal, checkInKyiv });
+  logCalculation({ airport: selectedAirport, dur, mode });
+}
+
+// ─── Логування в Google Sheets ────────────────────────────
+const LOG_URL = 'https://script.google.com/macros/s/AKfycbyFdJbYRbdsa8G7Nhnj-LLMn7qS17vClw5nJEtbdMe0SLrVNxHH1blJSWG86QI_EZRU7Q/exec';
+
+function logCalculation({ airport, dur, mode }) {
+  if (!LOG_URL || LOG_URL.startsWith('REPLACE')) return;
+  const payload = {
+    airport_code: airport.code,
+    airport_city: airport.city,
+    airport_country: airport.country,
+    mode: mode,
+    value: mode === 'days' ? dur.days : dur.hours,
+  };
+  fetch(LOG_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => {}); // тихо ігноруємо помилки
 }
 
 // ─── Форматування ─────────────────────────────────────────
