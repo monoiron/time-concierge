@@ -6,6 +6,15 @@
   <title>Time Concierge — реєстрація на рейс</title>
   <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
   <script src="airports.js"></script>
+  <script>
+    // Виконується до рендерингу — запобігає флікеру теми
+    (function() {
+      var pref = localStorage.getItem('tc_theme') || 'dark';
+      if (pref === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      else if (pref === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches)
+        document.documentElement.setAttribute('data-theme', 'light');
+    })();
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,6 +33,19 @@
       --radius-sm: 8px;
     }
 
+    [data-theme="light"] {
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --surface2: #eef0f5;
+      --border: #d0d4e3;
+      --accent: #3b6cf7;
+      --accent-hover: #2a58e0;
+      --green: #1aaa70;
+      --yellow: #c9960a;
+      --text: #1a1d2e;
+      --text-muted: #6b728e;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg);
@@ -38,6 +60,9 @@
     header {
       text-align: center;
       margin-bottom: 36px;
+      position: relative;
+      width: 100%;
+      max-width: 520px;
     }
 
     header h1 {
@@ -261,7 +286,7 @@
     }
 
     .custom-val-row input[type="number"] {
-      width: 90px;
+      width: 120px;
     }
 
     .custom-val-row span {
@@ -454,9 +479,54 @@
       margin-top: 28px;
       color: var(--text-muted);
       font-size: 0.72rem;
-      opacity: 0.5;
       letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
+
+    .feedback-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      opacity: 0.7;
+      transition: opacity 0.15s;
+      line-height: 1;
+    }
+
+    .feedback-link:hover { opacity: 1; }
+
+    .hint-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      padding: 0;
+      line-height: 1;
+      position: relative;
+    }
+
+    .hint-popup {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 0.88rem;
+      color: var(--text);
+      white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hint-btn.open .hint-popup,
+    .hint-btn:hover .hint-popup { display: block; }
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
@@ -468,6 +538,43 @@
     input[type="time"]::-webkit-calendar-picker-indicator {
       filter: invert(0.6);
       cursor: pointer;
+    }
+
+    [data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator,
+    [data-theme="light"] input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.3);
+    }
+
+    /* Theme switcher */
+    .theme-switcher {
+      display: flex;
+      gap: 4px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 3px;
+      position: absolute;
+      top: 0;
+      right: 0;
+    }
+
+    .theme-btn {
+      border: none;
+      background: transparent;
+      border-radius: 7px;
+      padding: 5px 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      line-height: 1;
+    }
+
+    .theme-btn:hover { color: var(--text); }
+
+    .theme-btn.active {
+      background: var(--accent);
+      color: #fff;
     }
 
     @media (max-width: 420px) {
@@ -484,6 +591,11 @@
   <span class="plane-icon">✈️</span>
   <h1>Time Concierge</h1>
   <p>Розрахунок часу відкриття реєстрації на рейс</p>
+  <div class="theme-switcher" id="themeSwitcher">
+    <button class="theme-btn" id="btnDark"  title="Темна тема">🌙</button>
+    <button class="theme-btn" id="btnLight" title="Світла тема">☀️</button>
+    <button class="theme-btn" id="btnAuto"  title="Як на девайсі">💻</button>
+  </div>
 </header>
 
 <div class="card">
@@ -537,7 +649,7 @@
         <button class="preset-btn" data-val="72">72 год</button>
       </div>
       <div class="custom-val-row">
-        <input type="number" id="customHours" min="1" max="999" placeholder="Інша кількість" />
+        <input type="number" id="customHours" min="1" max="999" placeholder="Інша к-сть" />
         <span>годин до вильоту</span>
       </div>
     </div>
@@ -554,7 +666,7 @@
         <button class="preset-btn" data-val="60">60 днів</button>
       </div>
       <div class="custom-val-row">
-        <input type="number" id="customDays" min="1" max="365" placeholder="Інша кількість" />
+        <input type="number" id="customDays" min="1" max="365" placeholder="Інша к-сть" />
         <span>днів до вильоту</span>
       </div>
     </div>
@@ -615,7 +727,12 @@
 
 </div>
 
-<div class="version-footer">v1.3</div>
+<div class="version-footer">
+  <span>v1.5</span>
+  <button class="hint-btn" id="hintBtn" title="Підказка">💡
+    <div class="hint-popup">Маєте ідеї або є що покращити? 🙌<br>Повідомте свого супервайзера або тренера 😊</div>
+  </button>
+</div>
 
 <script>
 const { DateTime } = luxon;
@@ -826,13 +943,13 @@ function calculate() {
   const checkInKyiv  = checkInLocal.setZone('Europe/Kiev');
 
   renderResult({ airport: selectedAirport, depLocal, checkInLocal, checkInKyiv });
-  logCalculation({ airport: selectedAirport, dur, mode });
+  logCalculation({ airport: selectedAirport, dur, mode, depLocal, checkInKyiv });
 }
 
 // ─── Логування в Google Sheets ────────────────────────────
 const LOG_URL = 'https://script.google.com/macros/s/AKfycbyFdJbYRbdsa8G7Nhnj-LLMn7qS17vClw5nJEtbdMe0SLrVNxHH1blJSWG86QI_EZRU7Q/exec';
 
-function logCalculation({ airport, dur, mode }) {
+function logCalculation({ airport, dur, mode, depLocal, checkInKyiv }) {
   if (!LOG_URL || LOG_URL.startsWith('REPLACE')) return;
   const payload = {
     airport_code: airport.code,
@@ -840,6 +957,9 @@ function logCalculation({ airport, dur, mode }) {
     airport_country: airport.country,
     mode: mode,
     value: mode === 'days' ? dur.days : dur.hours,
+    dep_date: depLocal.toISO(),
+    checkin_kyiv: checkInKyiv.toISO(),
+    user_agent: navigator.userAgent,
   };
   fetch(LOG_URL, {
     method: 'POST',
@@ -968,7 +1088,51 @@ function showError(msg) {
 }
 function hideError()  { document.getElementById('errorMsg').classList.remove('visible'); }
 function hideResult() { document.getElementById('resultCard').classList.remove('visible'); }
+
+// ─── Тема (dark / light / auto) ──────────────────────────
+const THEME_KEY = 'tc_theme';
+const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+
+function applyTheme(pref) {
+  const root = document.documentElement;
+  if (pref === 'light') {
+    root.setAttribute('data-theme', 'light');
+  } else if (pref === 'dark') {
+    root.removeAttribute('data-theme');
+  } else {
+    if (mediaQuery.matches) root.setAttribute('data-theme', 'light');
+    else root.removeAttribute('data-theme');
+  }
+  document.getElementById('btnDark').classList.toggle('active',  pref === 'dark');
+  document.getElementById('btnLight').classList.toggle('active', pref === 'light');
+  document.getElementById('btnAuto').classList.toggle('active',  pref === 'auto');
+}
+
+function setTheme(pref) {
+  localStorage.setItem(THEME_KEY, pref);
+  applyTheme(pref);
+}
+
+(function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(saved);
+})();
+
+document.getElementById('btnDark').addEventListener('click',  () => setTheme('dark'));
+document.getElementById('btnLight').addEventListener('click', () => setTheme('light'));
+document.getElementById('btnAuto').addEventListener('click',  () => setTheme('auto'));
+
+mediaQuery.addEventListener('change', () => {
+  if ((localStorage.getItem(THEME_KEY) || 'dark') === 'auto') applyTheme('auto');
+});
+
+// ─── Підказка (💡) ────────────────────────────────────────
+const hintBtn = document.getElementById('hintBtn');
+hintBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  hintBtn.classList.toggle('open');
+});
+document.addEventListener('click', () => hintBtn.classList.remove('open'));
 </script>
 </body>
 </html>
- 
